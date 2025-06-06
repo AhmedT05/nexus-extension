@@ -1,0 +1,34 @@
+{
+    "manifest_version": 3,
+    "name": "Contact Data Transfer Tool",
+    "version": "1.0",
+    "description": "Scrape and transfer contact data between platforms",
+    "permissions": [
+      "activeTab",
+      "scripting",
+      "storage",
+      "contextMenus",
+      "tabs"
+    ],
+    "host_permissions": [
+      "https://app.nexussales.io/*",
+      "https://onelink.intruity.com/*"
+    ],
+    "action": {
+      "default_popup": "popup.html",
+      "default_title": "Contact Data Transfer"
+    },
+    "content_scripts": [
+      {
+        "matches": [
+          "https://app.nexussales.io/*",
+          "https://onelink.intruity.com/*"
+        ],
+        "js": ["content.js"],
+        "run_at": "document_idle"
+      }
+    ],
+    "background": {
+      "service_worker": "background.js"
+    }
+  }
