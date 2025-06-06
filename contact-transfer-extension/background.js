@@ -153,15 +153,26 @@ class BackgroundService {
                     success: true
                 });
 
-                // Find and refresh the Nexus Sales tab
-                const tabs = await chrome.tabs.query({ url: '*://*.nexussales.io/*' });
-                for (const tab of tabs) {
-                    try {
-                        await chrome.tabs.reload(tab.id);
-                        console.log('Refreshed Nexus Sales tab:', tab.id);
-                    } catch (error) {
-                        console.error('Error refreshing tab:', error);
+                // Find and refresh all Nexus Sales tabs
+                try {
+                    const tabs = await chrome.tabs.query({ url: '*://*.nexussales.io/*' });
+                    console.log('Found Nexus Sales tabs:', tabs.length);
+                    
+                    if (tabs.length === 0) {
+                        console.log('No Nexus Sales tabs found to refresh');
+                    } else {
+                        for (const tab of tabs) {
+                            try {
+                                console.log('Attempting to refresh tab:', tab.id, tab.url);
+                                await chrome.tabs.reload(tab.id, { bypassCache: true });
+                                console.log('Successfully refreshed tab:', tab.id);
+                            } catch (error) {
+                                console.error('Error refreshing tab:', tab.id, error);
+                            }
+                        }
                     }
+                } catch (error) {
+                    console.error('Error finding or refreshing tabs:', error);
                 }
 
                 sendResponse({ 
