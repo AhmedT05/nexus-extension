@@ -7,7 +7,7 @@
             width: 350px;
             padding: 20px;
             font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
             color: white;
         }
         .container {
@@ -30,7 +30,7 @@
             font-weight: bold;
             font-size: 12px;
         }
-        input {
+        input, select {
             width: 100%;
             padding: 8px;
             border: none;
@@ -102,20 +102,25 @@
             <label for="api-key">Nexus Sales API Key:</label>
             <input type="password" id="api-key" placeholder="Enter your API key">
         </div>
-        
+
+        <div class="input-group">
+            <label for="workflow">Workflow:</label>
+            <select id="workflow">
+                <option value="">Select a workflow</option>
+            </select>
+        </div>
+
         <button id="save-key">Save API Key</button>
-        
+
         <div class="status" id="status"></div>
-        
-        <button id="scrape-data" class="scrape-btn" disabled>Scrape Contact Data</button>
-        
+
         <div class="contact-preview" id="contact-preview">
             <h3>Scraped Data:</h3>
             <div id="contact-details"></div>
         </div>
-        
-        <button id="transfer-data" disabled>Transfer to Nexus Sales</button>
-        
+
+        <button id="transfer-data" disabled>Transfer to Nexus</button>
+
         <div style="margin-top: 20px; font-size: 11px; text-align: center; opacity: 0.8;">
             Compatible with Nexus Sales & OneLink Intruity
         </div>

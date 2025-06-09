@@ -7,11 +7,11 @@
       "activeTab",
       "scripting",
       "storage",
-      "contextMenus",
-      "tabs"
+        "contextMenus",
+        "tabs"
     ],
     "host_permissions": [
-      "https://*.nexussales.io/*",
+        "https://*.nexussales.io/*",
       "https://onelink.intruity.com/*"
     ],
     "action": {
@@ -21,11 +21,11 @@
     "content_scripts": [
       {
         "matches": [
-          "https://*.nexussales.io/*",
+                "https://*.nexussales.io/*",
           "https://onelink.intruity.com/*"
         ],
-        "js": ["content.js"],
-        "run_at": "document_idle"
+            "js": ["content.js"],
+            "run_at": "document_idle"
       }
     ],
     "background": {
