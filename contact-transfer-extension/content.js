@@ -7,42 +7,42 @@ if (window.contactTransferExtensionLoaded) {
 } else {
     window.contactTransferExtensionLoaded = true;
 
-// Listen for messages from background script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('Content script received message:', message);
-    
-    if (message.action === 'extractData') {
-        try {
+    // Listen for messages from background script
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        console.log('Content script received message:', message);
+        
+        if (message.action === 'extractData') {
+            try {
                 console.log('Starting data extraction...');
-            const contactData = extractContactData();
-            console.log('Extracted contact data:', contactData);
-            
-            if (contactData && hasValidData(contactData)) {
-                showNotification('Contact data extracted successfully!', 'success');
-                chrome.runtime.sendMessage({
+                const contactData = extractContactData();
+                console.log('Extracted contact data:', contactData);
+                
+                if (contactData && hasValidData(contactData)) {
+                    showNotification('Contact data extracted successfully!', 'success');
+                    chrome.runtime.sendMessage({
                         from: 'content',
                         action: 'extractData',
                         data: contactData
                     });
                     sendResponse({ success: true });
-            } else {
-                const message = 'No contact data found on this page. Make sure you\'re on a contact details page.';
-                console.log(message);
-                showNotification(message, 'warning');
+                } else {
+                    const message = 'No contact data found on this page. Make sure you\'re on a contact details page.';
+                    console.log(message);
+                    showNotification(message, 'warning');
+                    sendResponse({ 
+                        success: false, 
+                        message: message
+                    });
+                }
+            } catch (error) {
+                console.error('Error extracting contact data:', error);
+                const errorMessage = `Error extracting data: ${error.message}`;
+                showNotification(errorMessage, 'error');
                 sendResponse({ 
                     success: false, 
-                    message: message
+                    message: errorMessage
                 });
             }
-        } catch (error) {
-            console.error('Error extracting contact data:', error);
-            const errorMessage = `Error extracting data: ${error.message}`;
-            showNotification(errorMessage, 'error');
-            sendResponse({ 
-                success: false, 
-                message: errorMessage
-            });
-        }
         } else if (message.action === 'getWorkflows') {
             // On OneLink, we don't need to get workflows
             if (window.location.href.includes('onelink.intruity.com')) {
@@ -52,12 +52,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 // This will be handled by the background script for Nexus Sales
                 sendResponse([]);
             }
-    }
-    
-    return true; // Keep message channel open
-});
+        }
+        
+        return true; // Keep message channel open
+    });
 
-function extractContactData() {
+    function extractContactData() {
         const data = {
             firstName: '',
             lastName: '',
@@ -242,84 +242,76 @@ function extractContactData() {
         }
 
         return null;
-}
+    }
 
-function hasValidData(contactData) {
+    function hasValidData(contactData) {
         const hasData = !!(contactData.email || contactData.phone);
         console.log('Data validation:', { hasData, contactData });
         return hasData;
-}
-
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 10000;
-        padding: 15px 20px;
-        border-radius: 5px;
-        color: white;
-        font-family: Arial, sans-serif;
-        font-size: 14px;
-        max-width: 300px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        transition: opacity 0.3s ease;
-            background-color: ${type === 'success' ? '#4CAF50' : 
-                             type === 'error' ? '#f44336' : 
-                             type === 'warning' ? '#ff9800' : 
-                             '#2196F3'};
-        `;
-        
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    }, 5000);
-}
-
-    // Add visual indicator
-function addExtensionIndicator() {
-        if (document.getElementById('contact-transfer-indicator')) return;
-    
-    const indicator = document.createElement('div');
-    indicator.id = 'contact-transfer-indicator';
-    indicator.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        z-index: 9999;
-        background: #4CAF50;
-        color: white;
-        padding: 5px 10px;
-        border-radius: 3px;
-        font-size: 12px;
-        font-family: Arial, sans-serif;
-        opacity: 0.7;
-    `;
-    indicator.textContent = 'Contact Transfer Extension Active';
-    document.body.appendChild(indicator);
-    
-    setTimeout(() => {
-        indicator.style.opacity = '0';
-        setTimeout(() => {
-            if (indicator.parentNode) {
-                indicator.parentNode.removeChild(indicator);
-            }
-        }, 1000);
-    }, 3000);
-}
-
-// Add indicator when page loads
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', addExtensionIndicator);
-} else {
-    addExtensionIndicator();
     }
+
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 5px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 999999;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: opacity 0.3s ease-in-out;
+        `;
+
+        // Set background color based on type
+        switch (type) {
+            case 'success':
+                notification.style.backgroundColor = '#4CAF50';
+                break;
+            case 'error':
+                notification.style.backgroundColor = '#f44336';
+                break;
+            case 'warning':
+                notification.style.backgroundColor = '#ff9800';
+                break;
+            default:
+                notification.style.backgroundColor = '#2196F3';
+        }
+
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        // Remove notification after 5 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 300);
+        }, 5000);
+    }
+
+    function addExtensionIndicator() {
+        const indicator = document.createElement('div');
+        indicator.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 999999;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        `;
+        indicator.textContent = 'Contact Transfer Extension Active';
+        document.body.appendChild(indicator);
+    }
+
+    // Add extension indicator when the page loads
+    addExtensionIndicator();
 }
