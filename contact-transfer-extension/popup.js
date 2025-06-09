@@ -1,55 +1,177 @@
 class ContactTransferTool {
     constructor() {
-        this.initializeEventListeners();
+        this.init();
+        this.contactData = null; // Add contact data storage
     }
 
-    initializeEventListeners() {
-        // Extract button click handler
-        document.getElementById('extractBtn')?.addEventListener('click', () => {
-            this.extractData();
-        });
+    init() {
+        // Initialize UI elements
+        this.apiKeyInput = document.getElementById('api-key');
+        this.saveKeyButton = document.getElementById('save-key');
+        this.transferButton = document.getElementById('transfer-data');
+        this.statusDiv = document.getElementById('status');
+        this.contactPreview = document.getElementById('contact-preview');
+        this.contactDetails = document.getElementById('contact-details');
+        this.workflowSelect = document.getElementById('workflow');
 
-        // Create button click handler
-        document.getElementById('createBtn')?.addEventListener('click', () => {
-            this.createContact();
-        });
+        // Load saved API key and workflows
+        this.loadApiKey();
+        this.loadWorkflows();
 
-        // Workflow select change handler
-        document.getElementById('workflowSelect')?.addEventListener('change', (e) => {
-            document.getElementById('createBtn').disabled = !e.target.value;
-        });
-    }
+        // Add event listeners
+        this.saveKeyButton.addEventListener('click', () => this.saveApiKey());
+        this.transferButton.addEventListener('click', () => this.transferContact());
 
-    async extractData() {
-        try {
-            this.showNotification('extractNotification', 'Extracting data...', 'info');
-            
-            // Get the active tab
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!tab) {
-                throw new Error('No active tab found');
+        // Listen for messages from content script
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            console.log('Popup received message:', message);
+            if (message.from === 'content' && message.action === 'extractData' && message.data) {
+                console.log('Displaying scraped data:', message.data);
+                this.contactData = message.data; // Store the contact data
+                this.displayScrapedData(message.data);
+                sendResponse({ received: true });
+            } else if (message.from === 'background' && message.subject === 'loadWorkflows') {
+                console.log('Received workflows:', message.workflows);
+                this.loadWorkflowsList(message.workflows);
+                sendResponse({ received: true });
             }
+        });
 
-            // Send message to content script
-            const response = await chrome.tabs.sendMessage(tab.id, { action: 'extractData' });
+        // Request data from content script
+        this.requestContactData();
+    }
+
+    async loadApiKey() {
+        try {
+            const response = await chrome.runtime.sendMessage({ 
+                from: 'popup',
+                action: 'getApiKey'
+            });
             
-            if (response && response.success) {
-                this.showNotification('extractNotification', 'Data extracted successfully!', 'success');
-                this.displayScrapedData(response.data);
-            } else {
-                throw new Error(response?.message || 'Failed to extract data');
+            if (response.apiKey) {
+                this.apiKeyInput.value = response.apiKey;
+                this.transferButton.disabled = false;
+                // Load workflows after getting API key
+                this.loadWorkflows();
             }
         } catch (error) {
-            console.error('Error extracting data:', error);
-            this.showNotification('extractNotification', error.message, 'error');
+            console.error('Error loading API key:', error);
         }
+    }
+
+    async loadWorkflows() {
+        try {
+            const response = await chrome.runtime.sendMessage({ 
+                from: 'popup',
+                action: 'getApiKey'
+            });
+            
+            if (response.apiKey) {
+                console.log('Loading workflows with API key');
+                chrome.runtime.sendMessage({
+                    from: 'popup',
+                    action: 'makeApiCall',
+                    subject2: 'getWorkflowsAndTags',
+                    apiKey: response.apiKey
+                });
+            }
+        } catch (error) {
+            console.error('Error loading workflows:', error);
+        }
+    }
+
+    loadWorkflowsList(workflows) {
+        console.log('Loading workflows list:', workflows);
+        if (!workflows || !workflows.length) {
+            console.log('No workflows available');
+            return;
+        }
+
+        // Clear existing options
+        this.workflowSelect.innerHTML = '<option value="">Select a workflow</option>';
+        
+        // Add new options
+        workflows.forEach(workflow => {
+            console.log('Adding workflow:', workflow);
+            const option = document.createElement('option');
+            option.value = workflow.id;
+            option.textContent = workflow.name;
+            this.workflowSelect.appendChild(option);
+        });
+    }
+
+    async saveApiKey() {
+        const apiKey = this.apiKeyInput.value.trim();
+        if (!apiKey) {
+            this.showStatus('Please enter an API key', 'error');
+            return;
+        }
+
+        try {
+            const response = await chrome.runtime.sendMessage({
+                from: 'popup',
+                action: 'saveApiKey',
+                apiKey: apiKey
+            });
+
+            if (response.success) {
+                this.showStatus('API key saved successfully', 'success');
+                this.transferButton.disabled = false;
+                // Load workflows after saving API key
+                this.loadWorkflows();
+            } else {
+                this.showStatus('Failed to save API key', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving API key:', error);
+            this.showStatus('Error saving API key', 'error');
+        }
+    }
+
+    async transferContact() {
+        try {
+            if (!this.contactData) {
+                this.showStatus('No contact data available', 'error');
+                return;
+            }
+
+            const workflowId = this.workflowSelect.value;
+            const response = await chrome.runtime.sendMessage({
+                from: 'popup',
+                action: 'transferContact',
+                workflowId: workflowId,
+                contactData: this.contactData // Send the stored contact data
+            });
+
+            if (response.success) {
+                this.showStatus(response.message, 'success');
+            } else {
+                this.showStatus(response.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error transferring contact:', error);
+            this.showStatus('Error transferring contact', 'error');
+        }
+    }
+
+    requestContactData() {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            console.log('Requesting contact data from tab:', tabs[0].id);
+            chrome.tabs.sendMessage(tabs[0].id, { action: 'extractData' }, (response) => {
+                console.log('Received response from content script:', response);
+                if (chrome.runtime.lastError) {
+                    console.error('Error requesting contact data:', chrome.runtime.lastError);
+                    this.showStatus('Error: ' + chrome.runtime.lastError.message, 'error');
+                }
+            });
+        });
     }
 
     displayScrapedData(data) {
         const preview = document.getElementById('contact-preview');
         const details = document.getElementById('contact-details');
         if (!preview || !details) return;
-        
+
         // Show the preview container
         preview.style.display = 'block';
         details.innerHTML = '';
@@ -99,52 +221,30 @@ class ContactTransferTool {
             addressField.innerHTML = `<strong>Address:</strong> ${addressParts.join(', ')}`;
             details.appendChild(addressField);
         }
-    }
 
-    showNotification(elementId, message, type = 'info') {
-        const notification = document.getElementById(elementId);
-        if (!notification) return;
-
-        notification.textContent = message;
-        notification.className = `notification ${type}`;
-        notification.style.display = 'block';
-
-        // Hide notification after 5 seconds
-        setTimeout(() => {
-            notification.style.display = 'none';
-        }, 5000);
-    }
-
-    async createContact() {
-        try {
-            const workflowId = document.getElementById('workflowSelect').value;
-            if (!workflowId) {
-                throw new Error('Please select a workflow');
-            }
-
-            this.showNotification('createNotification', 'Creating contact...', 'info');
-
-            // Get the active tab
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!tab) {
-                throw new Error('No active tab found');
-            }
-
-            // Send message to content script
-            const response = await chrome.tabs.sendMessage(tab.id, { 
-                action: 'createContact',
-                workflowId: workflowId
-            });
-            
-            if (response && response.success) {
-                this.showNotification('createNotification', 'Contact created successfully!', 'success');
-            } else {
-                throw new Error(response?.message || 'Failed to create contact');
-            }
-        } catch (error) {
-            console.error('Error creating contact:', error);
-            this.showNotification('createNotification', error.message, 'error');
+        // Show timezone if available
+        if (data.timezone) {
+            const timezoneField = document.createElement('div');
+            timezoneField.className = 'field';
+            timezoneField.innerHTML = `<strong>Timezone:</strong> ${data.timezone}`;
+            details.appendChild(timezoneField);
         }
+    }
+
+    formatFieldName(key) {
+        return key
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/^./, str => str.toUpperCase());
+    }
+
+    showStatus(message, type) {
+        this.statusDiv.textContent = message;
+        this.statusDiv.className = `status ${type}`;
+        this.statusDiv.style.display = 'block';
+
+        setTimeout(() => {
+            this.statusDiv.style.display = 'none';
+        }, 3000);
     }
 }
 
