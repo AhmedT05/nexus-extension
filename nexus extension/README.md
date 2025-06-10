@@ -1,48 +1,59 @@
-# Contact Transfer Extension
+# Nexus Extension
 
-A Chrome extension for transferring contact data between OneLink Intruity and Nexus Sales platforms.
+A Chrome extension that seamlessly transfers contact data between OneLink Intruity and Nexus Sales platforms.
 
 ## Features
 
-- Scrape contact data from OneLink Intruity pages
-- Transfer contact data to Nexus Sales
-- Automatic page refresh after successful transfer
-- Modern UI with status notifications
-- Support for multiple API keys
+- **One-Click Data Transfer**: Automatically extracts and transfers contact information with a single click
+- **Smart Data Extraction**: Intelligently identifies and captures contact details from OneLink Intruity pages
+- **Workflow Integration**: Direct integration with Nexus Sales workflows
+- **Default Workflow Support**: Save and automatically use your preferred workflow
+- **Modern UI**: Clean, intuitive interface with real-time status updates
+- **Secure API Key Storage**: Safely stores your Nexus Sales API key
+- **Automatic Page Refresh**: Refreshes Nexus Sales pages after successful transfers
 
 ## Installation
 
 1. Clone this repository
-2. Open Chrome and go to `chrome://extensions/`
-3. Enable "Developer mode" in the top right
+2. Open Chrome and navigate to `chrome://extensions/`
+3. Enable "Developer mode" in the top right corner
 4. Click "Load unpacked" and select the extension directory
 
 ## Usage
 
-1. Save your Nexus Sales API key in the extension
-2. Navigate to a OneLink Intruity page with contact information
-3. Click the extension icon to open the popup
-4. Click "Scrape Contact Data" to extract the contact information
-5. Click "Transfer to Nexus Sales" to send the data
+1. **Setup**:
+   - Click the extension icon to open the popup
+   - Enter your Nexus Sales API key and click "Save API Key"
 
-## Development
+2. **Transferring Contacts**:
+   - Navigate to a OneLink Intruity page with contact information
+   - Click the extension icon
+   - Select your desired workflow (optional)
+   - Click "Transfer to Nexus" to send the data
 
-The extension consists of the following components:
+3. **Setting Default Workflow**:
+   - Select your preferred workflow
+   - Check "Save as default workflow"
+   - The selected workflow will be automatically used for future transfers
 
-- `manifest.json`: Extension configuration
-- `popup.html/js`: User interface and interaction
-- `content.js`: Data extraction from web pages
-- `background.js`: API communication and data processing
+## Security
 
-## Permissions
+- API keys are stored securely in Chrome's local storage
+- No data is stored on external servers
+- All data transfers are encrypted using HTTPS
 
-The extension requires the following permissions:
-- `activeTab`: To access the current tab's content
-- `scripting`: To inject content scripts
-- `storage`: To save API keys and settings
-- `tabs`: To refresh pages after transfer
-- `contextMenus`: For future context menu integration
+## Requirements
+
+- Google Chrome browser
+- Valid Nexus Sales API key
+- Access to OneLink Intruity and Nexus Sales platforms
+
+## Support
+
+For support or feature requests, please contact the development team.
 
 ## License
 
-MIT License 
+This software is proprietary and confidential. Unauthorized copying, distribution, or use is strictly prohibited.
+
+© 2024 Nexus Sales. All rights reserved. 
