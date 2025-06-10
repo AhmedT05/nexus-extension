@@ -18,6 +18,20 @@ console.log('Contact Transfer Extension background script loaded');
             return true;
         }
 
+        if (message.action === 'saveDefaultWorkflow') {
+            chrome.storage.local.set({ defaultWorkflow: message.workflowId }, () => {
+                sendResponse({ success: true });
+            });
+            return true;
+        }
+
+        if (message.action === 'getDefaultWorkflow') {
+            chrome.storage.local.get(['defaultWorkflow'], (result) => {
+                sendResponse({ defaultWorkflow: result.defaultWorkflow });
+            });
+            return true;
+        }
+
         if (message.action === 'makeApiCall') {
             const apiKey = message.apiKey;
             if (message.subject2 === 'getWorkflowsAndTags') {
@@ -240,11 +254,19 @@ console.log('Contact Transfer Extension background script loaded');
                 })
                 .then(data => {
                     console.log('Final success response:', data);
-                sendResponse({ 
-                    success: true, 
-                    message: 'Contact transferred successfully',
+                    // Refresh all Nexus website tabs
+                    chrome.tabs.query({}, function(tabs) {
+                        tabs.forEach(tab => {
+                            if (tab.url && tab.url.includes('nexussales.io')) {
+                                chrome.tabs.reload(tab.id);
+                            }
+                        });
+                    });
+                    sendResponse({ 
+                        success: true, 
+                        message: 'Contact transferred successfully',
                         contactId: data.contact.id
-                });
+                    });
                 })
                 .catch(error => {
                     console.error('Error transferring contact:', error);

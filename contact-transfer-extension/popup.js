@@ -13,14 +13,17 @@ class ContactTransferTool {
         this.contactPreview = document.getElementById('contact-preview');
         this.contactDetails = document.getElementById('contact-details');
         this.workflowSelect = document.getElementById('workflow');
+        this.saveWorkflowCheckbox = document.getElementById('save-workflow');
 
         // Load saved API key and workflows
         this.loadApiKey();
         this.loadWorkflows();
+        this.loadDefaultWorkflow();
 
         // Add event listeners
         this.saveKeyButton.addEventListener('click', () => this.saveApiKey());
         this.transferButton.addEventListener('click', () => this.transferContact());
+        this.workflowSelect.addEventListener('change', () => this.handleWorkflowChange());
 
         // Listen for messages from content script
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -98,6 +101,9 @@ class ContactTransferTool {
             option.textContent = workflow.name;
             this.workflowSelect.appendChild(option);
         });
+
+        // Load and set the default workflow after populating the select
+        this.loadDefaultWorkflow();
     }
 
     async saveApiKey() {
@@ -128,6 +134,40 @@ class ContactTransferTool {
         }
     }
 
+    async loadDefaultWorkflow() {
+        try {
+            const response = await chrome.runtime.sendMessage({ 
+                from: 'popup',
+                action: 'getDefaultWorkflow'
+            });
+            
+            if (response.defaultWorkflow) {
+                console.log('Setting default workflow:', response.defaultWorkflow);
+                this.workflowSelect.value = response.defaultWorkflow;
+                // Also check the save checkbox to indicate it's the default
+                this.saveWorkflowCheckbox.checked = true;
+            }
+        } catch (error) {
+            console.error('Error loading default workflow:', error);
+        }
+    }
+
+    async handleWorkflowChange() {
+        if (this.saveWorkflowCheckbox.checked) {
+            try {
+                await chrome.runtime.sendMessage({
+                    from: 'popup',
+                    action: 'saveDefaultWorkflow',
+                    workflowId: this.workflowSelect.value
+                });
+                this.showStatus('Default workflow saved', 'success');
+            } catch (error) {
+                console.error('Error saving default workflow:', error);
+                this.showStatus('Error saving default workflow', 'error');
+            }
+        }
+    }
+
     async transferContact() {
         try {
             if (!this.contactData) {
@@ -136,11 +176,21 @@ class ContactTransferTool {
             }
 
             const workflowId = this.workflowSelect.value;
+            
+            // Save as default workflow if checkbox is checked
+            if (this.saveWorkflowCheckbox.checked) {
+                await chrome.runtime.sendMessage({
+                    from: 'popup',
+                    action: 'saveDefaultWorkflow',
+                    workflowId: workflowId
+                });
+            }
+
             const response = await chrome.runtime.sendMessage({
                 from: 'popup',
                 action: 'transferContact',
                 workflowId: workflowId,
-                contactData: this.contactData // Send the stored contact data
+                contactData: this.contactData
             });
 
             if (response.success) {
