@@ -200,7 +200,11 @@ class ContactTransferTool {
             });
 
             if (response.success) {
-                this.showStatus(response.message, 'success');
+                if (response.isDuplicate) {
+                    this.showStatus(response.message, 'warning');
+                } else {
+                    this.showStatus(response.message, 'success');
+                }
             } else {
                 this.showStatus(response.message, 'error');
             }

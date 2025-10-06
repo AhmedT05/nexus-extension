@@ -125,58 +125,171 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     return;
                 }
 
-                // Create contact in GoHighLevel
-                const contactPayload = {
-                    firstName: contactData.firstName || '',
-                    lastName: contactData.lastName || '',
-                    email: contactData.email || '',
-                    phone: contactData.phone || '',
-                    dateOfBirth: contactData.dob || '',
-                    address1: contactData.address || '',
-                    city: contactData.city || '',
-                    state: contactData.state || '',
-                    postalCode: contactData.zipcode || '',
-                    country: 'US',
-                    source: 'OneLink Intruity',
-                    customField: {
-                        dateOfBirth: contactData.dob || '',
-                        timezone: contactData.timezone || ''
+                // First, check if contact already exists
+                const checkExistingContact = async () => {
+                    const searchParams = new URLSearchParams();
+                    if (contactData.email) {
+                        searchParams.append('email', contactData.email);
+                    }
+                    if (contactData.phone) {
+                        searchParams.append('phone', contactData.phone);
+                    }
+
+                    const searchUrl = `https://rest.gohighlevel.com/v1/contacts/?${searchParams.toString()}`;
+                    const searchOptions = {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json'
+                        }
+                    };
+
+                    try {
+                        console.log('Searching for existing contact at URL:', searchUrl);
+                        const searchResponse = await fetch(searchUrl, searchOptions);
+                        const searchText = await searchResponse.text();
+                        let searchData;
+                        try {
+                            searchData = JSON.parse(searchText);
+                        } catch (e) {
+                            console.warn('Failed to parse contacts search JSON; raw text:', searchText);
+                            searchData = null;
+                        }
+                        console.log('Contacts search raw response status:', searchResponse.status);
+                        console.log('Contacts search parsed payload keys:', searchData ? Object.keys(searchData) : 'null');
+                        
+                        const normalizePhone = (p) => (p || '').replace(/\D/g, '').slice(-10);
+                        const targetEmail = (contactData.email || '').trim().toLowerCase();
+                        const targetPhone = normalizePhone(contactData.phone);
+
+                        let matchedContact = null;
+                        if (searchData && Array.isArray(searchData.contacts)) {
+                            for (const c of searchData.contacts) {
+                                const foundEmail = (c.email || '').trim().toLowerCase();
+                                const foundPhone = normalizePhone(c.phone);
+
+                                const emailMatches = targetEmail && foundEmail && foundEmail === targetEmail;
+                                const phoneMatches = targetPhone && foundPhone && foundPhone === targetPhone;
+
+                                // If both provided, require at least one exact match; if only one provided, require that one.
+                                const isMatch = (targetEmail && targetPhone)
+                                    ? (emailMatches || phoneMatches)
+                                    : (targetEmail ? emailMatches : phoneMatches);
+
+                                if (isMatch) {
+                                    matchedContact = c;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (matchedContact) {
+                            console.log('Exact match found for existing contact:', {
+                                id: matchedContact.id,
+                                email: matchedContact.email,
+                                phone: matchedContact.phone
+                            });
+                            
+                            // If workflow is selected, add existing contact to workflow
+                            if (message.workflowId) {
+                                const current_datetime = String(new Date().toISOString()).slice(0, 19) + "+00:00";
+                                const workflowOptions = {
+                                    method: 'POST',
+                                    headers: {
+                                        'Authorization': `Bearer ${apiKey}`,
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({ eventStartTime: current_datetime })
+                                };
+                                
+                                console.log('Adding existing contact to workflow:', {
+                                    contactId: matchedContact.id,
+                                    workflowId: message.workflowId
+                                });
+                                
+                                const workflowResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/${matchedContact.id}/workflow/${message.workflowId}`, workflowOptions);
+                                if (!workflowResponse.ok) {
+                                    throw new Error(`Failed to add existing contact to workflow`);
+                                }
+                            }
+                            
+                            return { 
+                                success: true, 
+                                message: 'Contact has already been transferred',
+                                contactId: matchedContact.id,
+                                isDuplicate: true
+                            };
+                        }
+                        
+                        // Contact doesn't exist, proceed with creation
+                        return null;
+                    } catch (error) {
+                        console.error('Error checking for existing contact:', error);
+                        // If search fails, proceed with creation
+                        return null;
                     }
                 };
 
-                // Remove empty fields
-                Object.keys(contactPayload).forEach(key => {
-                    if (contactPayload[key] === '' || contactPayload[key] === null || contactPayload[key] === undefined) {
-                        delete contactPayload[key];
+                // Check for existing contact first
+                checkExistingContact().then(existingResult => {
+                    if (existingResult) {
+                        sendResponse(existingResult);
+                        return;
                     }
-                });
 
-                // Remove empty custom fields
-                if (contactPayload.customField) {
-                    Object.keys(contactPayload.customField).forEach(key => {
-                        if (contactPayload.customField[key] === '' || contactPayload.customField[key] === null || contactPayload.customField[key] === undefined) {
-                            delete contactPayload.customField[key];
+                    // Create contact in GoHighLevel
+                    const contactPayload = {
+                        firstName: contactData.firstName || '',
+                        lastName: contactData.lastName || '',
+                        email: contactData.email || '',
+                        phone: contactData.phone || '',
+                        dateOfBirth: contactData.dob || '',
+                        address1: contactData.address || '',
+                        city: contactData.city || '',
+                        state: contactData.state || '',
+                        postalCode: contactData.zipcode || '',
+                        country: 'US',
+                        // Ensure GHL stores the correct timezone (IANA name)
+                        timezone: contactData.timezone || undefined,
+                        source: 'OneLink Intruity',
+                        customField: {
+                            dateOfBirth: contactData.dob || ''
+                        }
+                    };
+
+                    // Remove empty fields
+                    Object.keys(contactPayload).forEach(key => {
+                        if (contactPayload[key] === '' || contactPayload[key] === null || contactPayload[key] === undefined) {
+                            delete contactPayload[key];
                         }
                     });
-                    // Remove customField if empty
-                    if (Object.keys(contactPayload.customField).length === 0) {
-                        delete contactPayload.customField;
+
+                    // Remove empty custom fields
+                    if (contactPayload.customField) {
+                        Object.keys(contactPayload.customField).forEach(key => {
+                            if (contactPayload.customField[key] === '' || contactPayload.customField[key] === null || contactPayload.customField[key] === undefined) {
+                                delete contactPayload.customField[key];
+                            }
+                        });
+                        // Remove customField if empty
+                        if (Object.keys(contactPayload.customField).length === 0) {
+                            delete contactPayload.customField;
+                        }
                     }
-                }
 
-                const requestOptions = {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify(contactPayload)
-                };
+                    const requestOptions = {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(contactPayload)
+                    };
 
-                console.log('Sending contact data:', JSON.stringify(contactPayload, null, 2));
+                    console.log('Sending contact data:', JSON.stringify(contactPayload, null, 2));
 
-                fetch('https://rest.gohighlevel.com/v1/contacts/', requestOptions)
+                    fetch('https://rest.gohighlevel.com/v1/contacts/', requestOptions)
                 .then(response => {
                     console.log('Contact creation response status:', response.status);
                     console.log('Contact creation response headers:', Object.fromEntries(response.headers.entries()));
@@ -230,6 +343,84 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         throw new Error(`Failed to create contact: Invalid response format - ${JSON.stringify(data)}`);
                     }
 
+                    // Some GHL accounts only honor timezone on update; enforce it with a follow-up call
+                    if (contactData.timezone) {
+                        const contactId = data.contact.id;
+                        const tz = contactData.timezone;
+                        const aliasMap = {
+                            'America/New_York': 'US/Eastern',
+                            'America/Chicago': 'US/Central',
+                            'America/Denver': 'US/Mountain',
+                            'America/Los_Angeles': 'US/Pacific'
+                        };
+                        const candidates = [tz];
+                        if (aliasMap[tz]) candidates.push(aliasMap[tz]);
+
+                        const tryUpdate = async () => {
+                            for (const value of candidates) {
+                                // Try PATCH with 'timezone'
+                                try {
+                                    console.log('Attempting PATCH timezone with value:', value);
+                                    const resp = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}`, {
+                                        method: 'PATCH',
+                                        headers: {
+                                            'Authorization': `Bearer ${apiKey}`,
+                                            'Content-Type': 'application/json',
+                                            'Accept': 'application/json'
+                                        },
+                                        body: JSON.stringify({ timezone: value })
+                                    });
+                                    const text = await resp.text();
+                                    console.log('PATCH timezone response:', resp.status, text);
+                                    if (resp.ok) return true;
+                                } catch (e) {
+                                    console.warn('PATCH timezone failed:', e);
+                                }
+
+                                // Try PATCH with 'timeZone'
+                                try {
+                                    console.log('Attempting PATCH timeZone with value:', value);
+                                    const resp = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}`, {
+                                        method: 'PATCH',
+                                        headers: {
+                                            'Authorization': `Bearer ${apiKey}`,
+                                            'Content-Type': 'application/json',
+                                            'Accept': 'application/json'
+                                        },
+                                        body: JSON.stringify({ timeZone: value })
+                                    });
+                                    const text = await resp.text();
+                                    console.log('PATCH timeZone response:', resp.status, text);
+                                    if (resp.ok) return true;
+                                } catch (e) {
+                                    console.warn('PATCH timeZone failed:', e);
+                                }
+
+                                // Try PUT with 'timezone'
+                                try {
+                                    console.log('Attempting PUT timezone with value:', value);
+                                    const resp = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}`, {
+                                        method: 'PUT',
+                                        headers: {
+                                            'Authorization': `Bearer ${apiKey}`,
+                                            'Content-Type': 'application/json',
+                                            'Accept': 'application/json'
+                                        },
+                                        body: JSON.stringify({ timezone: value })
+                                    });
+                                    const text = await resp.text();
+                                    console.log('PUT timezone response:', resp.status, text);
+                                    if (resp.ok) return true;
+                                } catch (e) {
+                                    console.warn('PUT timezone failed:', e);
+                                }
+                            }
+                            return false;
+                        };
+
+                        return tryUpdate().then(() => data).catch(() => data);
+                    }
+
                     // If workflow is selected, add contact to workflow
                     if (message.workflowId) {
                         const current_datetime = String(new Date().toISOString()).slice(0, 19) + "+00:00";
@@ -272,10 +463,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 })
                 .catch(error => {
                     console.error('Error transferring contact:', error);
-                sendResponse({ 
-                    success: false, 
+                    sendResponse({ 
+                        success: false, 
                         message: `Error: ${error.message}`
                     });
+                });
                 });
             });
             return true;
