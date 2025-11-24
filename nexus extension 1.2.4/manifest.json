@@ -1,15 +1,17 @@
 {
     "manifest_version": 3,
     "name": "Nexus",
-    "version": "1.1.0",
-    "description": "Transfer contact data to Nexus Sales.",
+    "version": "1.2.4",
+    "description": "Transfer contacts from OneLink Intruity to GoHighLevel with workflow enrollment and timezone preservation.",
     "permissions": [
       "activeTab",
       "storage"
     ],
     "host_permissions": [
         "https://*.nexussales.io/*",
-      "https://onelink.intruity.com/*"
+        "https://onelink.intruity.com/*",
+        "https://rest.gohighlevel.com/*",
+        "https://services.leadconnectorhq.com/*"
     ],
     "action": {
       "default_popup": "popup.html",

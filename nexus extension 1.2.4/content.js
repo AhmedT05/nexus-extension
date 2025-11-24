@@ -19,12 +19,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             
             if (contactData && hasValidData(contactData)) {
                 showNotification('Contact data extracted successfully!', 'success');
-                chrome.runtime.sendMessage({
-                        from: 'content',
-                        action: 'extractData',
-                        data: contactData
-                    });
-                    sendResponse({ success: true });
+                sendResponse({ 
+                    success: true, 
+                    data: contactData 
+                });
             } else {
                 const message = 'No contact data found on this page. Make sure you\'re on a contact details page.';
                 console.log(message);
@@ -68,7 +66,7 @@ function extractContactData() {
             city: '',
             state: '',
             zipcode: '',
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            timezone: ''
         };
     
         const currentUrl = window.location.href;
@@ -111,18 +109,49 @@ function extractContactData() {
                     parentHTML: input.parentElement?.outerHTML
                 });
 
+                // Log any suspicious name-like fields that might be IDs
+                if ((label.toLowerCase().includes('name') || name.toLowerCase().includes('name') || id.toLowerCase().includes('name')) && value && !/^[a-zA-Z\s\-']+$/.test(value)) {
+                    console.warn('Suspicious name field detected (likely an ID):', {
+                        value: value,
+                        label: label,
+                        name: name,
+                        id: id,
+                        type: input.type
+                    });
+                }
+
+                // Helper function to validate if a value looks like a real name
+                const isValidName = (val) => {
+                    // Must be at least 1 character, max 50 characters
+                    if (!val || val.length < 1 || val.length > 50) return false;
+                    
+                    // Must contain only letters, spaces, hyphens, and apostrophes
+                    if (!/^[a-zA-Z\s\-']+$/.test(val)) return false;
+                    
+                    // Must not contain numbers or special characters that aren't in names
+                    if (/[0-9_@#$%^&*()+=<>?/\\|`~]/.test(val)) return false;
+                    
+                    // Must not be all uppercase (likely an ID)
+                    if (val === val.toUpperCase() && val.length > 3) return false;
+                    
+                    // Must not contain common ID patterns
+                    if (/^(FP|ID|REF|TOKEN|KEY|CODE|NUM|NO)\s*[A-Z0-9]+$/i.test(val)) return false;
+                    
+                    return true;
+                };
+
                 // Check for first name
-                if ((label.toLowerCase().includes('first name') || name.toLowerCase().includes('firstname') || id.toLowerCase().includes('firstname')) && value) {
+                if ((label.toLowerCase().includes('first name') || name.toLowerCase().includes('firstname') || id.toLowerCase().includes('firstname')) && value && isValidName(value)) {
                     console.log('Found first name input:', value);
                     data.firstName = value.split(' ')[0]; // Only take the first part
                 }
                 // Check for last name
-                else if ((label.toLowerCase().includes('last name') || name.toLowerCase().includes('lastname') || id.toLowerCase().includes('lastname')) && value) {
+                else if ((label.toLowerCase().includes('last name') || name.toLowerCase().includes('lastname') || id.toLowerCase().includes('lastname')) && value && isValidName(value)) {
                     console.log('Found last name input:', value);
                     data.lastName = value;
                 }
                 // Check for full name if first/last not found
-                else if ((label.toLowerCase().includes('name') || name.toLowerCase().includes('name') || id.toLowerCase().includes('name')) && value && !data.firstName && !data.lastName) {
+                else if ((label.toLowerCase().includes('name') || name.toLowerCase().includes('name') || id.toLowerCase().includes('name')) && value && !data.firstName && !data.lastName && isValidName(value)) {
                     console.log('Found full name input:', value);
                     // If the value contains a space, it's likely a full name
                     if (value.includes(' ')) {
@@ -253,6 +282,32 @@ function extractContactData() {
                     }
                 }
             });
+
+            // —— NEW: scrape the page's own "Current Leadtime" field ——
+            // 1) Find the <label> whose exact text is "Current Leadtime:"
+            const labelEl = Array.from(
+              document.querySelectorAll('.form-group label')
+            ).find(el => el.textContent.trim() === 'Current Leadtime:');
+
+            if (labelEl) {
+              // 2) Get the sibling <input> and read its .value
+              const inputEl = labelEl.parentElement.querySelector('input.form-control');
+              const raw = inputEl?.value?.trim() || ''; 
+              //    e.g. "9:04:37 PM Central"
+
+              // 3) Split on whitespace and take the last token
+              const parts = raw.split(/\s+/);
+              let tz = parts.pop() || '';
+
+              // — Map abbreviations to full IANA names (as used by the website) —
+              const TZ_MAP = {
+                Eastern:  'America/New_York',
+                Central:  'America/Chicago',
+                Mountain: 'America/Denver',
+                Pacific:  'America/Los_Angeles'
+              };
+              data.timezone = TZ_MAP[tz] || tz;
+            }
         }
 
         console.log('Final extracted data:', data);
@@ -313,65 +368,13 @@ function hasValidData(contactData) {
 }
 
 function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-            padding: 15px 25px;
-        border-radius: 5px;
-        color: white;
-        font-family: Arial, sans-serif;
-        font-size: 14px;
-            z-index: 999999;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            transition: opacity 0.3s ease-in-out;
-    `;
-    
-    // Set background color based on type
-        switch (type) {
-            case 'success':
-                notification.style.backgroundColor = '#4CAF50';
-                break;
-            case 'error':
-                notification.style.backgroundColor = '#f44336';
-                break;
-            case 'warning':
-                notification.style.backgroundColor = '#ff9800';
-                break;
-            default:
-                notification.style.backgroundColor = '#2196F3';
-        }
-
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-        // Remove notification after 5 seconds
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => {
-                document.body.removeChild(notification);
-        }, 300);
-    }, 5000);
+    // Disabled popup notifications - only log to console
+    console.log(`[${type.toUpperCase()}] ${message}`);
 }
 
 function addExtensionIndicator() {
-    const indicator = document.createElement('div');
-    indicator.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-            background-color: #4CAF50;
-        color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-        font-family: Arial, sans-serif;
-            font-size: 14px;
-            z-index: 999999;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    `;
-    indicator.textContent = 'Contact Transfer Extension Active';
-    document.body.appendChild(indicator);
+    // Disabled extension indicator - only log to console
+    console.log('Contact Transfer Extension Active');
 }
 
     // Add extension indicator when the page loads
